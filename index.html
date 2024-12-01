@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Distributed Game Store</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f4f4f9;
+        }
+        header {
+            background-color: #333;
+            color: #fff;
+            padding: 10px 20px;
+            text-align: center;
+        }
+        .container {
+            padding: 20px;
+        }
+        .game-card {
+            background-color: #fff;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        .game-title {
+            font-size: 1.5rem;
+            color: #333;
+            margin: 0;
+        }
+        .game-details {
+            font-size: 0.9rem;
+            color: #555;
+        }
+        .platforms {
+            margin-top: 10px;
+        }
+        .platform-badge {
+            display: inline-block;
+            background-color: #007bff;
+            color: #fff;
+            padding: 5px 10px;
+            margin-right: 5px;
+            border-radius: 4px;
+            font-size: 0.8rem;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Distributed Game Store</h1>
+    </header>
+    <div class="container" id="gamesContainer">
+        <!-- Games will be dynamically loaded here -->
+    </div>
+
+    <script>
+        // Fetch games from the backend
+        async function loadGames() {
+            const response = await fetch('./mock-games.json');
+            const games = await response.json();
+            const gamesContainer = document.getElementById('gamesContainer');
+            gamesContainer.innerHTML = ''; // Clear existing content
+
+            games.forEach(game => {
+                const gameCard = document.createElement('div');
+                gameCard.className = 'game-card';
+
+                const platforms = [];
+                if (game.windows) platforms.push('<span class="platform-badge">Windows</span>');
+                if (game.mac) platforms.push('<span class="platform-badge">Mac</span>');
+                if (game.linux) platforms.push('<span class="platform-badge">Linux</span>');
+
+                gameCard.innerHTML = `
+                    <h2 class="game-title">${game.name}</h2>
+                    <p class="game-details">Release Date: ${new Date(game.release_date).toLocaleDateString()}</p>
+                    <p class="game-details">Price: $${game.price}</p>
+                    <p class="game-details">${game.about_the_game}</p>
+                    <div class="platforms">${platforms.join(' ')}</div>
+                `;
+
+                gamesContainer.appendChild(gameCard);
+            });
+        }
+
+        // Load games on page load
+        document.addEventListener('DOMContentLoaded', loadGames);
+    </script>
+</body>
+</html>
