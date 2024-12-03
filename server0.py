@@ -156,7 +156,7 @@ if st.session_state.view_mode == "Read View":
 
 else:
     st.title("Write View: STEAM Games")
-    tabs = st.tabs(["Update Game Details", "Delete Game"])
+    tabs = st.tabs(["Add Game", "Update Game Details", "Delete Game"])
 
     connection = create_connection()
 
@@ -164,6 +164,54 @@ else:
         cursor = connection.cursor()
 
         with tabs[0]:
+            st.header("Add New Game")
+            try:
+                # Fetch the next available app_id
+                cursor.execute("SELECT MAX(app_id) FROM games_data;")
+                max_app_id = cursor.fetchone()[0]
+                new_app_id = (max_app_id + 1) if max_app_id else 1
+
+                st.write(f"Assigned Game ID: {new_app_id}")
+
+                new_name = st.text_input("Game Name")
+                new_price = st.number_input("Price", min_value=0.0, step=0.01)
+                new_release_date = st.date_input("Release Date")
+                new_about = st.text_area("About the Game")
+                new_platforms = st.multiselect(
+                    "Platforms",
+                    options=["Windows", "Mac", "Linux"],
+                    key="add_game_platforms" 
+                )
+
+                if st.button("Add Game"):
+                    # Validation: Ensure that required fields are not empty
+                    if not new_name or not new_price or not new_release_date or not new_about:
+                        st.error("Please fill in all the fields: Name, Price, Release Date, and About the Game.")
+                    elif not new_platforms:  # Validation: Ensure that at least one platform is selected
+                        st.error("Please select at least one platform (Windows, Mac, or Linux).")
+                    else:
+                        insert_query = """
+                        INSERT INTO games_data (app_id, name, price, release_date, about_the_game, windows, mac, linux)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s);
+                        """
+                        values = (
+                            new_app_id,
+                            new_name,
+                            new_price,
+                            new_release_date,
+                            new_about,
+                            1 if "Windows" in new_platforms else 0,
+                            1 if "Mac" in new_platforms else 0,
+                            1 if "Linux" in new_platforms else 0,
+                        )
+                        cursor.execute(insert_query, values)
+                        connection.commit()
+                        st.success(f"Game '{new_name}' added successfully with ID {new_app_id}.")
+
+            except mysql.connector.Error as e:
+                st.error(f"Error adding game: {e}")
+
+        with tabs[1]:
             st.header("Update Game Details")
             try:
                 app_id = st.number_input("Enter Game ID to update", min_value=1, step=1)
@@ -226,7 +274,8 @@ else:
                             [current_windows, current_mac, current_linux]
                         )
                         if flag
-                    ]
+                    ],
+                    key="update_game_platforms"
                 )
 
                 if st.button("Update Game"):
@@ -258,7 +307,7 @@ else:
             except mysql.connector.Error as e:
                 st.error(f"Error: {e}")
 
-        with tabs[1]:
+        with tabs[2]:
             st.header("Delete Game")
             try:
                 app_id_to_delete = st.number_input("Enter Game ID to delete", min_value=1, step=1)
