@@ -165,33 +165,53 @@ else:
     connection = create_connection()
 
     if connection:
+        cursor = connection.cursor()
+
         # Update Game Details Tab
         with tabs[0]:
             st.header("Update Game Details")
             try:
                 app_id = st.number_input("Enter Game ID to update", min_value=1, step=1)
-                
+
+                # Initialize session state for fetched game details
+                if "game_details" not in st.session_state:
+                    st.session_state["game_details"] = None
+
                 # Fetch existing game details when a valid app_id is entered
                 if st.button("Fetch Game Details"):
-                    fetch_query = "SELECT name, price, release_date, about_the_game, windows, mac, linux FROM games_data WHERE app_id = %s"
-                    cursor = connection.cursor()
+                    fetch_query = """
+                    SELECT name, price, release_date, about_the_game, windows, mac, linux 
+                    FROM games_data 
+                    WHERE app_id = %s
+                    """
                     cursor.execute(fetch_query, (app_id,))
                     game = cursor.fetchone()
-                    
+
                     if game:
-                        current_name, current_price, current_release_date, current_about, current_windows, current_mac, current_linux = game
+                        st.session_state["game_details"] = {
+                            "name": game[0],
+                            "price": game[1],
+                            "release_date": game[2],
+                            "about": game[3],
+                            "windows": game[4],
+                            "mac": game[5],
+                            "linux": game[6],
+                        }
                         st.success("Game details fetched successfully.")
                     else:
+                        st.session_state["game_details"] = None
                         st.error(f"No game found with ID {app_id}")
-                        current_name = ""
-                        current_price = 0.0
-                        current_release_date = None
-                        current_about = ""
-                        current_windows = 0
-                        current_mac = 0
-                        current_linux = 0
+
+                # Retrieve tentative defaults from session state or initialize them
+                if st.session_state["game_details"]:
+                    current_name = st.session_state["game_details"]["name"]
+                    current_price = st.session_state["game_details"]["price"]
+                    current_release_date = st.session_state["game_details"]["release_date"]
+                    current_about = st.session_state["game_details"]["about"]
+                    current_windows = st.session_state["game_details"]["windows"]
+                    current_mac = st.session_state["game_details"]["mac"]
+                    current_linux = st.session_state["game_details"]["linux"]
                 else:
-                    # Initialize default values before fetching
                     current_name = ""
                     current_price = 0.0
                     current_release_date = None
@@ -200,17 +220,20 @@ else:
                     current_mac = 0
                     current_linux = 0
 
-                # Display form fields with fetched defaults
+                # Display form fields with fetched defaults as tentative values
                 new_name = st.text_input("New Name", value=current_name)
                 new_price = st.number_input("New Price", min_value=0.0, step=0.01, value=float(current_price))
-                new_release_date = st.date_input("New Release Date", value=current_release_date)
+                new_release_date = st.date_input("New Release Date", value=current_release_date or datetime.date.today())
                 new_about = st.text_area("New About the Game", value=current_about)
                 new_platforms = st.multiselect(
                     "Platforms",
                     options=["Windows", "Mac", "Linux"],
                     default=[
                         platform
-                        for platform, flag in zip(["Windows", "Mac", "Linux"], [current_windows, current_mac, current_linux])
+                        for platform, flag in zip(
+                            ["Windows", "Mac", "Linux"],
+                            [current_windows, current_mac, current_linux]
+                        )
                         if flag
                     ]
                 )

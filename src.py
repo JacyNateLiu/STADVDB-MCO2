@@ -109,7 +109,7 @@ if st.session_state.view_mode == "Read View":
     records_per_page = 10
 
     # Add sorting options in the sidebar
-    sort_by = st.sidebar.selectbox("Sort by", options=["Price", "Release Date", "Name"], index=0)
+    sort_by = st.sidebar.selectbox("Sort by", options=["Name", "Release Date", "Price"], index=0)
     sort_order = st.sidebar.radio("Sort order", options=["Ascending", "Descending"], index=0)
 
     # Create database connection
@@ -134,7 +134,8 @@ if st.session_state.view_mode == "Read View":
             st.subheader(f"Page {current_page} of {total_pages}")
             if not games_df.empty:
                 for _, game in games_df.iterrows():
-                    st.markdown(f"### {game['name']}")
+                    # Display game name and app_id
+                    st.markdown(f"### {game['name']} (ID: {game['app_id']})")
                     st.write(f"**Release Date:** {game['release_date']}")
                     st.write(f"**Price:** ${game['price']}")
                     st.write(f"**About the Game:** {game['about_the_game']}")
@@ -152,25 +153,130 @@ if st.session_state.view_mode == "Read View":
                 st.write("No games available for the selected filters.")
         else:
             st.write("No games found.")
-        connection.close()
+            connection.close()
     else:
         st.warning("Failed to connect to the database.")
 
 else:
     st.title("Write View: STEAM Games")
-    tabs = st.tabs(["View Games", "Update Game Details", "Delete Game"])
+    tabs = st.tabs(["Update Game Details", "Delete Game"])
 
-    # View Games Tab
-    with tabs[0]:
-        st.header("View Games")
-        st.write("Add your logic for viewing games here.")
+    # Create database connection
+    connection = create_connection()
 
-    # Update Game Details Tab
-    with tabs[1]:
-        st.header("Update Game Details")
-        st.write("Add your logic for updating game details here.")
+    if connection:
+        cursor = connection.cursor()
 
-    # Delete Game Tab
-    with tabs[2]:
-        st.header("Delete Game")
-        st.write("Add your logic for deleting games here.")
+        # Update Game Details Tab
+        with tabs[0]:
+            st.header("Update Game Details")
+            try:
+                app_id = st.number_input("Enter Game ID to update", min_value=1, step=1)
+
+                # Initialize session state for fetched game details
+                if "game_details" not in st.session_state:
+                    st.session_state["game_details"] = None
+
+                # Fetch existing game details when a valid app_id is entered
+                if st.button("Fetch Game Details"):
+                    fetch_query = """
+                    SELECT name, price, release_date, about_the_game, windows, mac, linux 
+                    FROM games_data 
+                    WHERE app_id = %s
+                    """
+                    cursor.execute(fetch_query, (app_id,))
+                    game = cursor.fetchone()
+
+                    if game:
+                        st.session_state["game_details"] = {
+                            "name": game[0],
+                            "price": game[1],
+                            "release_date": game[2],
+                            "about": game[3],
+                            "windows": game[4],
+                            "mac": game[5],
+                            "linux": game[6],
+                        }
+                        st.success("Game details fetched successfully.")
+                    else:
+                        st.session_state["game_details"] = None
+                        st.error(f"No game found with ID {app_id}")
+
+                # Retrieve tentative defaults from session state or initialize them
+                if st.session_state["game_details"]:
+                    current_name = st.session_state["game_details"]["name"]
+                    current_price = st.session_state["game_details"]["price"]
+                    current_release_date = st.session_state["game_details"]["release_date"]
+                    current_about = st.session_state["game_details"]["about"]
+                    current_windows = st.session_state["game_details"]["windows"]
+                    current_mac = st.session_state["game_details"]["mac"]
+                    current_linux = st.session_state["game_details"]["linux"]
+                else:
+                    current_name = ""
+                    current_price = 0.0
+                    current_release_date = None
+                    current_about = ""
+                    current_windows = 0
+                    current_mac = 0
+                    current_linux = 0
+
+                # Display form fields with fetched defaults as tentative values
+                new_name = st.text_input("New Name", value=current_name)
+                new_price = st.number_input("New Price", min_value=0.0, step=0.01, value=float(current_price))
+                new_release_date = st.date_input("New Release Date", value=current_release_date or datetime.date.today())
+                new_about = st.text_area("New About the Game", value=current_about)
+                new_platforms = st.multiselect(
+                    "Platforms",
+                    options=["Windows", "Mac", "Linux"],
+                    default=[
+                        platform
+                        for platform, flag in zip(
+                            ["Windows", "Mac", "Linux"],
+                            [current_windows, current_mac, current_linux]
+                        )
+                        if flag
+                    ]
+                )
+
+                # Update game details
+                if st.button("Update Game"):
+                    update_query = """
+                    UPDATE games_data
+                    SET name = %s, price = %s, release_date = %s, about_the_game = %s, windows = %s, mac = %s, linux = %s
+                    WHERE app_id = %s;
+                    """
+                    values = (
+                        new_name,
+                        new_price,
+                        new_release_date,
+                        new_about,
+                        1 if "Windows" in new_platforms else 0,
+                        1 if "Mac" in new_platforms else 0,
+                        1 if "Linux" in new_platforms else 0,
+                        app_id,
+                    )
+                    cursor.execute(update_query, values)
+                    connection.commit()
+                    st.success(f"Game ID {app_id} updated successfully.")
+
+            except mysql.connector.Error as e:
+                st.error(f"Error: {e}")
+
+        # Delete Game Tab
+        with tabs[1]:
+            st.header("Delete Game")
+            try:
+                app_id_to_delete = st.number_input("Enter Game ID to delete", min_value=1, step=1)
+
+                if st.button("Delete Game"):
+                    delete_query = "DELETE FROM games_data WHERE app_id = %s;"
+                    cursor = connection.cursor()
+                    cursor.execute(delete_query, (app_id_to_delete,))
+                    connection.commit()
+                    st.success(f"Game ID {app_id_to_delete} deleted successfully.")
+            except mysql.connector.Error as e:
+                st.error(f"Error deleting game: {e}")
+
+        connection.close()
+    else:
+        st.warning("Failed to connect to the database.")
