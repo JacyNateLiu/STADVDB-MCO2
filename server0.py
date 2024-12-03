@@ -206,7 +206,7 @@ else:
 
                 new_name = st.text_input("New Name", value=current_name)
                 new_price = st.number_input("New Price", min_value=0.0, step=0.01, value=float(current_price))
-                new_release_date = st.date_input("New Release Date", value=current_release_date or datetime.date.today())
+                new_release_date = st.date_input("New Release Date", value=current_release_date)
                 new_about = st.text_area("New About the Game", value=current_about)
                 new_platforms = st.multiselect(
                     "Platforms",
@@ -222,24 +222,30 @@ else:
                 )
 
                 if st.button("Update Game"):
-                    update_query = """
-                    UPDATE games_data
-                    SET name = %s, price = %s, release_date = %s, about_the_game = %s, windows = %s, mac = %s, linux = %s
-                    WHERE app_id = %s;
-                    """
-                    values = (
-                        new_name,
-                        new_price,
-                        new_release_date,
-                        new_about,
-                        1 if "Windows" in new_platforms else 0,
-                        1 if "Mac" in new_platforms else 0,
-                        1 if "Linux" in new_platforms else 0,
-                        app_id,
-                    )
-                    cursor.execute(update_query, values)
-                    connection.commit()
-                    st.success(f"Game ID {app_id} updated successfully.")
+                    # Validation: Ensure that required fields are not empty
+                    if not new_name or not new_price or not new_release_date or not new_about:
+                        st.error("Please fill in all the fields: Name, Price, Release Date, and About the Game.")
+                    elif not new_platforms:  # Validation: Ensure that at least one platform is selected
+                        st.error("Please select at least one platform (Windows, Mac, or Linux).")
+                    else:
+                        update_query = """
+                        UPDATE games_data
+                        SET name = %s, price = %s, release_date = %s, about_the_game = %s, windows = %s, mac = %s, linux = %s
+                        WHERE app_id = %s;
+                        """
+                        values = (
+                            new_name,
+                            new_price,
+                            new_release_date,
+                            new_about,
+                            1 if "Windows" in new_platforms else 0,
+                            1 if "Mac" in new_platforms else 0,
+                            1 if "Linux" in new_platforms else 0,
+                            app_id,
+                        )
+                        cursor.execute(update_query, values)
+                        connection.commit()
+                        st.success(f"Game ID {app_id} updated successfully.")
 
             except mysql.connector.Error as e:
                 st.error(f"Error: {e}")
@@ -250,11 +256,19 @@ else:
                 app_id_to_delete = st.number_input("Enter Game ID to delete", min_value=1, step=1)
 
                 if st.button("Delete Game"):
-                    delete_query = "DELETE FROM games_data WHERE app_id = %s;"
-                    cursor = connection.cursor()
-                    cursor.execute(delete_query, (app_id_to_delete,))
-                    connection.commit()
-                    st.success(f"Game ID {app_id_to_delete} deleted successfully.")
+                    # Check if the game exists before trying to delete
+                    check_query = "SELECT 1 FROM games_data WHERE app_id = %s;"
+                    cursor.execute(check_query, (app_id_to_delete,))
+                    game_exists = cursor.fetchone()
+
+                    if not game_exists:
+                        st.error(f"No game found with ID {app_id_to_delete}.")
+                    else:
+                        # Proceed with deletion if the game exists
+                        delete_query = "DELETE FROM games_data WHERE app_id = %s;"
+                        cursor.execute(delete_query, (app_id_to_delete,))
+                        connection.commit()
+                        st.success(f"Game ID {app_id_to_delete} deleted successfully.")
             except mysql.connector.Error as e:
                 st.error(f"Error deleting game: {e}")
 
