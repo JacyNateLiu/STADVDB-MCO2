@@ -7,7 +7,7 @@ def create_connection():
     try:
         connection = mysql.connector.connect(
             host="ccscloud.dlsu.edu.ph",
-            port=21312,
+            port=21292,
             user="your_username",
             password="your_password",
             database="games"
@@ -36,8 +36,9 @@ def get_total_records(connection, platform_filter):
         st.error(f"Error calculating total records: {e}")
         return 0
 
-def fetch_paginated_data(connection, platform_filter, offset, records_per_page):
+def fetch_paginated_data(connection, platform_filter, offset, records_per_page, sort_by, sort_order):
     try:
+        # Build the base query with filters
         query = "SELECT * FROM games_data WHERE "
         conditions = []
         if "Windows" in platform_filter:
@@ -47,7 +48,22 @@ def fetch_paginated_data(connection, platform_filter, offset, records_per_page):
         if "Linux" in platform_filter:
             conditions.append("linux = 1")
         query += " OR ".join(conditions) if conditions else "1"
+
+        # Add sorting logic
+        sort_column_mapping = {
+            "App ID": "app_id",
+            "Name": "name",
+            "Release Date": "release_date",
+            "Price": "price"
+        }
+        sort_column = sort_column_mapping.get(sort_by, "app_id")  # Default to "app_id" if no match
+        order = "ASC" if sort_order == "Ascending" else "DESC"
+        query += f" ORDER BY {sort_column} {order}"
+
+        # Add pagination logic
         query += f" LIMIT {records_per_page} OFFSET {offset};"
+
+        # Execute the query and fetch data
         df = pd.read_sql(query, con=connection)
         return df
     except mysql.connector.Error as e:
@@ -99,7 +115,7 @@ if st.session_state.view_mode == "Read View":
 
     records_per_page = 10
 
-    sort_by = st.sidebar.selectbox("Sort by", options=["Name", "Release Date", "Price"], index=0)
+    sort_by = st.sidebar.selectbox("Sort by", options=["App ID", "Name", "Release Date", "Price"], index=0)
     sort_order = st.sidebar.radio("Sort order", options=["Ascending", "Descending"], index=0)
 
     connection = create_connection()
@@ -110,16 +126,8 @@ if st.session_state.view_mode == "Read View":
             total_pages = (total_records // records_per_page) + (1 if total_records % records_per_page > 0 else 0)
             current_page = st.number_input("Page number", min_value=1, max_value=total_pages, value=1)
             offset = (current_page - 1) * records_per_page
-            games_df = fetch_paginated_data(connection, platform_filter, offset, records_per_page)
-
- 
-            if sort_by == "Price":
-                games_df = games_df.sort_values(by="price", ascending=(sort_order == "Ascending"))
-            elif sort_by == "Release Date":
-                games_df = games_df.sort_values(by="release_date", ascending=(sort_order == "Ascending"))
-            elif sort_by == "Name":
-                games_df = games_df.sort_values(by="name", ascending=(sort_order == "Ascending"))
-
+            games_df = fetch_paginated_data(connection, platform_filter, offset, records_per_page, sort_by, sort_order)
+                
             st.subheader(f"Page {current_page} of {total_pages}")
             if not games_df.empty:
                 for _, game in games_df.iterrows():
