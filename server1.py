@@ -7,7 +7,7 @@ def create_connection():
     try:
         connection = mysql.connector.connect(
             host="ccscloud.dlsu.edu.ph",
-            port=21292,
+            port=21302,
             user="your_username",
             password="your_password",
             database="games"
