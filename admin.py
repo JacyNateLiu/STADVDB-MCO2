@@ -1,41 +1,63 @@
 import streamlit as st
 import pandas as pd
-import time
+import mysql.connector
+from mysql.connector import Error  # Corrected import
 
-# Simulating database updates (hardcoded)
-def get_game_data():
-    return [
-        {"app_id": 1, "name": "Game One", "price": 29.99, "about_the_game": "Exciting game!"},
-        {"app_id": 2, "name": "Game Two", "price": 19.99, "about_the_game": "Strategic fun!"},
-    ]
+def create_connection():
+    try:
+        connection = mysql.connector.connect(
+            host="ccscloud.dlsu.edu.ph",
+            port=21292,
+            user="your_username",
+            password="your_password",
+            database="games"
+        )
+        return connection
+    except mysql.connector.Error as e:
+        st.error(f"Database connection failed: {e}")
+        return None
 
 @st.cache_data
-def fetch_games():
-    # Simulate database fetch
-    time.sleep(1)  # Simulate latency
-    return pd.DataFrame(get_game_data())
+def fetch_games_from_db():
+    connection = create_connection()
+    if connection:
+        query = "SELECT * FROM games_data;"  # Update "games" to your actual table name
+        df = pd.read_sql(query, connection)
+        connection.close()
+        return df
+    else:
+        return pd.DataFrame()  # Return an empty DataFrame if connection fails
 
-def admin_update_game_price(app_id, new_price):
-    # Simulate a database update
-    for game in get_game_data():
-        if game["app_id"] == app_id:
-            game["price"] = new_price
+def update_game_price(app_id, new_price):
+    connection = create_connection()
+    if connection:
+        cursor = connection.cursor()
+        try:
+            query = "UPDATE games SET price = %s WHERE app_id = %s;"  # Update table name and column if different
+            cursor.execute(query, (new_price, app_id))
+            connection.commit()
+            st.sidebar.success("Price updated successfully!")
+        except Error as e:
+            st.sidebar.error(f"Failed to update price: {e}")
+        finally:
+            cursor.close()
+            connection.close()
 
-# Streamlit app
-st.title("Distributed Game Store Platform")
+st.title("Distributed Game Store Platform (SQL Connected)")
 
-# Show data to users
 if st.button("Refresh Game Data"):
     st.experimental_rerun()
 
 st.header("Games List")
-df = fetch_games()
-st.write(df)
+games_df = fetch_games_from_db()
+if not games_df.empty:
+    st.write(games_df)
+else:
+    st.error("Failed to load game data from the database.")
 
-# Admin Interface
 st.sidebar.header("Admin Section")
-app_id = st.sidebar.selectbox("Select Game ID to Update", options=df["app_id"])
-new_price = st.sidebar.number_input("New Price", min_value=0.0, value=29.99, step=0.01)
-if st.sidebar.button("Update Price"):
-    admin_update_game_price(app_id, new_price)
-    st.sidebar.write("Price updated successfully!")
+if not games_df.empty:
+    app_id = st.sidebar.selectbox("Select Game ID to Update", options=games_df["app_id"])
+    new_price = st.sidebar.number_input("New Price", min_value=0.0, value=29.99, step=0.01)
+    if st.sidebar.button("Update Price"):
+        update_game_price(app_id, new_price)
