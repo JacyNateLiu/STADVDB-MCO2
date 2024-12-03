@@ -3,7 +3,6 @@ import pandas as pd
 import mysql.connector
 from mysql.connector import Error
 
-# Function to create a database connection
 def create_connection():
     try:
         connection = mysql.connector.connect(
@@ -18,7 +17,6 @@ def create_connection():
         st.error(f"Database connection failed: {e}")
         return None
 
-# Function to fetch total records count
 def get_total_records(connection, platform_filter):
     try:
         query = "SELECT COUNT(*) FROM games_data WHERE "
@@ -38,7 +36,6 @@ def get_total_records(connection, platform_filter):
         st.error(f"Error calculating total records: {e}")
         return 0
 
-# Function to fetch paginated game data
 def fetch_paginated_data(connection, platform_filter, offset, records_per_page):
     try:
         query = "SELECT * FROM games_data WHERE "
@@ -57,14 +54,13 @@ def fetch_paginated_data(connection, platform_filter, offset, records_per_page):
         st.error(f"Error fetching data: {e}")
         return pd.DataFrame()
 
-# Function to generate styled platform labels
 def platform_box(platform):
     platform_colors = {
-        "Windows": "#1e90ff",  # Blue for Windows
-        "Mac": "#eb6434",      # Red-Orange for Mac
-        "Linux": "#32cd32"     # Green for Linux
+        "Windows": "#1e90ff",# Blue for Windows
+        "Mac": "#eb6434",    # Red-Orange for Mac
+        "Linux": "#32cd32"   # Green for Linux
     }
-    color = platform_colors.get(platform, "#ffffff")  # Default to white if no color defined
+    color = platform_colors.get(platform, "#ffffff")
     html = f"""
     <div style="
         display: inline-block;
@@ -82,37 +78,30 @@ def platform_box(platform):
     """
     return html
 
-# Initialize session state
 if "view_mode" not in st.session_state:
     st.session_state.view_mode = "Read View"
 
-# Sidebar for navigation
 st.sidebar.header("Navigation")
 if st.sidebar.button("Switch View"):
-    # Toggle between views
+
     st.session_state.view_mode = (
         "Write View" if st.session_state.view_mode == "Read View" else "Read View"
     )
 st.sidebar.write(f"Current View: **{st.session_state.view_mode}**")
 
-# Load the selected view
 if st.session_state.view_mode == "Read View":
     st.title("Read View: STEAM Games")
 
-    # Sidebar filters
     st.sidebar.header("Filters")
     platform_filter = st.sidebar.multiselect(
         "Platforms", options=["Windows", "Mac", "Linux"], default=["Windows", "Mac", "Linux"]
     )
 
-    # Define records per page
     records_per_page = 10
 
-    # Add sorting options in the sidebar
     sort_by = st.sidebar.selectbox("Sort by", options=["Name", "Release Date", "Price"], index=0)
     sort_order = st.sidebar.radio("Sort order", options=["Ascending", "Descending"], index=0)
 
-    # Create database connection
     connection = create_connection()
 
     if connection:
@@ -123,7 +112,7 @@ if st.session_state.view_mode == "Read View":
             offset = (current_page - 1) * records_per_page
             games_df = fetch_paginated_data(connection, platform_filter, offset, records_per_page)
 
-            # Sort data
+ 
             if sort_by == "Price":
                 games_df = games_df.sort_values(by="price", ascending=(sort_order == "Ascending"))
             elif sort_by == "Release Date":
@@ -161,23 +150,19 @@ else:
     st.title("Write View: STEAM Games")
     tabs = st.tabs(["Update Game Details", "Delete Game"])
 
-    # Create database connection
     connection = create_connection()
 
     if connection:
         cursor = connection.cursor()
 
-        # Update Game Details Tab
         with tabs[0]:
             st.header("Update Game Details")
             try:
                 app_id = st.number_input("Enter Game ID to update", min_value=1, step=1)
 
-                # Initialize session state for fetched game details
                 if "game_details" not in st.session_state:
                     st.session_state["game_details"] = None
 
-                # Fetch existing game details when a valid app_id is entered
                 if st.button("Fetch Game Details"):
                     fetch_query = """
                     SELECT name, price, release_date, about_the_game, windows, mac, linux 
@@ -202,7 +187,6 @@ else:
                         st.session_state["game_details"] = None
                         st.error(f"No game found with ID {app_id}")
 
-                # Retrieve tentative defaults from session state or initialize them
                 if st.session_state["game_details"]:
                     current_name = st.session_state["game_details"]["name"]
                     current_price = st.session_state["game_details"]["price"]
@@ -220,7 +204,6 @@ else:
                     current_mac = 0
                     current_linux = 0
 
-                # Display form fields with fetched defaults as tentative values
                 new_name = st.text_input("New Name", value=current_name)
                 new_price = st.number_input("New Price", min_value=0.0, step=0.01, value=float(current_price))
                 new_release_date = st.date_input("New Release Date", value=current_release_date or datetime.date.today())
@@ -238,7 +221,6 @@ else:
                     ]
                 )
 
-                # Update game details
                 if st.button("Update Game"):
                     update_query = """
                     UPDATE games_data
@@ -262,7 +244,6 @@ else:
             except mysql.connector.Error as e:
                 st.error(f"Error: {e}")
 
-        # Delete Game Tab
         with tabs[1]:
             st.header("Delete Game")
             try:
