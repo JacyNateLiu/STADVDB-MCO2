@@ -21,7 +21,6 @@ def create_connection():
 # Function to fetch total records count
 def get_total_records(connection, platform_filter):
     try:
-        # Construct query based on the platform filter
         query = "SELECT COUNT(*) FROM games_data WHERE "
         conditions = []
         if "Windows" in platform_filter:
@@ -30,7 +29,7 @@ def get_total_records(connection, platform_filter):
             conditions.append("mac = 1")
         if "Linux" in platform_filter:
             conditions.append("linux = 1")
-        query += " OR ".join(conditions) if conditions else "1"  # Default query if no filter
+        query += " OR ".join(conditions) if conditions else "1"
         cursor = connection.cursor()
         cursor.execute(query)
         total_records = cursor.fetchone()[0]
@@ -50,20 +49,20 @@ def fetch_paginated_data(connection, platform_filter, offset, records_per_page):
             conditions.append("mac = 1")
         if "Linux" in platform_filter:
             conditions.append("linux = 1")
-        query += " OR ".join(conditions) if conditions else "1"  # Default query if no filter
+        query += " OR ".join(conditions) if conditions else "1"
         query += f" LIMIT {records_per_page} OFFSET {offset};"
         df = pd.read_sql(query, con=connection)
         return df
     except mysql.connector.Error as e:
         st.error(f"Error fetching data: {e}")
-        return pd.DataFrame()  # Return empty DataFrame on error
+        return pd.DataFrame()
 
-# Function to generate styled platform labels with a rectangular box and rounded borders
+# Function to generate styled platform labels
 def platform_box(platform):
     platform_colors = {
         "Windows": "#1e90ff",  # Blue for Windows
-        "Mac": "#eb6434",      # Light grey for Mac
-        "Linux": "#32cd32"      # Green for Linux
+        "Mac": "#eb6434",      # Red-Orange for Mac
+        "Linux": "#32cd32"     # Green for Linux
     }
     color = platform_colors.get(platform, "#ffffff")  # Default to white if no color defined
     html = f"""
@@ -83,95 +82,23 @@ def platform_box(platform):
     """
     return html
 
-# Streamlit app
-st.title("STEAM Games")
+# Initialize session state
+if "view_mode" not in st.session_state:
+    st.session_state.view_mode = "Read View"
 
-# Sidebar filters
-st.sidebar.header("Filters")
-platform_filter = st.sidebar.multiselect(
-    "Platforms", options=["Windows", "Mac", "Linux"], default=["Windows", "Mac", "Linux"]
-)
+# Sidebar for navigation
+st.sidebar.header("Navigation")
+if st.sidebar.button("Switch View"):
+    # Toggle between views
+    st.session_state.view_mode = (
+        "Write View" if st.session_state.view_mode == "Read View" else "Read View"
+    )
+st.sidebar.write(f"Current View: **{st.session_state.view_mode}**")
 
-# Define records per page
-records_per_page = 10
+# Load the selected view
+if st.session_state.view_mode == "Read View":
+    st.title("Read View: STEAM Games")
 
-# Add sorting options in the sidebar
-sort_by = st.sidebar.selectbox(
-    "Sort by", options=["Price", "Release Date", "Name"], index=0
-)
-sort_order = st.sidebar.radio(
-    "Sort order", options=["Ascending", "Descending"], index=0
-)
-
-# Create database connection
-connection = create_connection()
-
-if connection:
-    # Get total records based on filters
-    total_records = get_total_records(connection, platform_filter)
-    
-    if total_records > 0:
-        # Calculate total pages
-        total_pages = (total_records // records_per_page) + (1 if total_records % records_per_page > 0 else 0)
-        
-        # Allow user to select the page number
-        current_page = st.number_input("Page number", min_value=1, max_value=total_pages, value=1)
-        
-        # Calculate offset based on the selected page number
-        offset = (current_page - 1) * records_per_page
-        
-        # Fetch paginated data
-        games_df = fetch_paginated_data(connection, platform_filter, offset, records_per_page)
-
-        # Sort the data based on the selected sort criteria
-        if sort_by == "Price":
-            games_df = games_df.sort_values(by="price", ascending=(sort_order == "Ascending"))
-        elif sort_by == "Release Date":
-            games_df = games_df.sort_values(by="release_date", ascending=(sort_order == "Ascending"))
-        elif sort_by == "Name":
-            games_df = games_df.sort_values(by="name", ascending=(sort_order == "Ascending"))
-
-        # Display the filtered and paginated data
-        st.subheader(f"Page {current_page} of {total_pages}")
-        if not games_df.empty:
-            for _, game in games_df.iterrows():
-                st.markdown(f"### {game['name']}")
-                st.write(f"**Release Date:** {game['release_date']}")
-                st.write(f"**Price:** ${game['price']}")
-                st.write(f"**About the Game:** {game['about_the_game']}")
-                
-                # Display platforms in styled boxes
-                platforms = []
-                if game['windows']:
-                    platforms.append("Windows")
-                if game['mac']:
-                    platforms.append("Mac")
-                if game['linux']:
-                    platforms.append("Linux")
-                
-                # Display platform boxes
-                platform_html = "".join([platform_box(platform) for platform in platforms])
-                st.markdown(platform_html, unsafe_allow_html=True)
-
-                st.markdown("---")
-    else:
-        st.write("No games available for the selected filters.")
-    
-    # Close the connection
-    connection.close()
-else:
-    st.warning("Failed to connect to the database.")
-
-# Streamlit app SEPARATE TAB
-st.title("STEAM Games")
-
-# Tabs for switching between views
-tabs = st.tabs(["View Games", "Update Game Details", "Delete Game"])
-
-# View Games tab
-with tabs[0]:
-    st.header("View Games")
-    
     # Sidebar filters
     st.sidebar.header("Filters")
     platform_filter = st.sidebar.multiselect(
@@ -182,34 +109,21 @@ with tabs[0]:
     records_per_page = 10
 
     # Add sorting options in the sidebar
-    sort_by = st.sidebar.selectbox(
-        "Sort by", options=["Price", "Release Date", "Name"], index=0
-    )
-    sort_order = st.sidebar.radio(
-        "Sort order", options=["Ascending", "Descending"], index=0
-    )
+    sort_by = st.sidebar.selectbox("Sort by", options=["Price", "Release Date", "Name"], index=0)
+    sort_order = st.sidebar.radio("Sort order", options=["Ascending", "Descending"], index=0)
 
     # Create database connection
     connection = create_connection()
 
     if connection:
-        # Get total records based on filters
         total_records = get_total_records(connection, platform_filter)
-        
         if total_records > 0:
-            # Calculate total pages
             total_pages = (total_records // records_per_page) + (1 if total_records % records_per_page > 0 else 0)
-            
-            # Allow user to select the page number
             current_page = st.number_input("Page number", min_value=1, max_value=total_pages, value=1)
-            
-            # Calculate offset based on the selected page number
             offset = (current_page - 1) * records_per_page
-            
-            # Fetch paginated data
             games_df = fetch_paginated_data(connection, platform_filter, offset, records_per_page)
 
-            # Sort the data based on the selected sort criteria
+            # Sort data
             if sort_by == "Price":
                 games_df = games_df.sort_values(by="price", ascending=(sort_order == "Ascending"))
             elif sort_by == "Release Date":
@@ -217,7 +131,6 @@ with tabs[0]:
             elif sort_by == "Name":
                 games_df = games_df.sort_values(by="name", ascending=(sort_order == "Ascending"))
 
-            # Display the filtered and paginated data
             st.subheader(f"Page {current_page} of {total_pages}")
             if not games_df.empty:
                 for _, game in games_df.iterrows():
@@ -225,8 +138,6 @@ with tabs[0]:
                     st.write(f"**Release Date:** {game['release_date']}")
                     st.write(f"**Price:** ${game['price']}")
                     st.write(f"**About the Game:** {game['about_the_game']}")
-                    
-                    # Display platforms in styled boxes
                     platforms = []
                     if game['windows']:
                         platforms.append("Windows")
@@ -234,74 +145,32 @@ with tabs[0]:
                         platforms.append("Mac")
                     if game['linux']:
                         platforms.append("Linux")
-                    
-                    # Display platform boxes
                     platform_html = "".join([platform_box(platform) for platform in platforms])
                     st.markdown(platform_html, unsafe_allow_html=True)
-
                     st.markdown("---")
+            else:
+                st.write("No games available for the selected filters.")
         else:
-            st.write("No games available for the selected filters.")
-        
-        # Close the connection
+            st.write("No games found.")
         connection.close()
     else:
         st.warning("Failed to connect to the database.")
 
-# Update Game Details tab
-with tabs[1]:
-    st.header("Update Game Details")
-    connection = create_connection()
-    
-    if connection:
-        game_id = st.number_input("Enter Game ID to Update:", min_value=1, step=1)
-        new_name = st.text_input("New Name:")
-        new_price = st.number_input("New Price ($):", min_value=0.0, step=0.01)
-        new_release_date = st.date_input("New Release Date:")
-        about_the_game = st.text_area("New Description:")
-        
-        platforms = st.multiselect("Select Platforms:", options=["Windows", "Mac", "Linux"])
-        update_button = st.button("Update Game")
-        
-        if update_button:
-            try:
-                cursor = connection.cursor()
-                query = """
-                UPDATE games_data
-                SET name = %s, price = %s, release_date = %s, about_the_game = %s, 
-                    windows = %s, mac = %s, linux = %s
-                WHERE id = %s
-                """
-                cursor.execute(query, (
-                    new_name, new_price, new_release_date, about_the_game,
-                    "Windows" in platforms, "Mac" in platforms, "Linux" in platforms, game_id
-                ))
-                connection.commit()
-                st.success("Game details updated successfully!")
-            except mysql.connector.Error as e:
-                st.error(f"Error updating game details: {e}")
-        connection.close()
-    else:
-        st.warning("Failed to connect to the database.")
+else:
+    st.title("Write View: STEAM Games")
+    tabs = st.tabs(["View Games", "Update Game Details", "Delete Game"])
 
-# Delete Game tab
-with tabs[2]:
-    st.header("Delete Game")
-    connection = create_connection()
-    
-    if connection:
-        game_id_to_delete = st.number_input("Enter Game ID to Delete:", min_value=1, step=1)
-        delete_button = st.button("Delete Game")
-        
-        if delete_button:
-            try:
-                cursor = connection.cursor()
-                query = "DELETE FROM games_data WHERE id = %s"
-                cursor.execute(query, (game_id_to_delete,))
-                connection.commit()
-                st.success("Game deleted successfully!")
-            except mysql.connector.Error as e:
-                st.error(f"Error deleting game: {e}")
-        connection.close()
-    else:
-        st.warning("Failed to connect to the database.")
+    # View Games Tab
+    with tabs[0]:
+        st.header("View Games")
+        st.write("Add your logic for viewing games here.")
+
+    # Update Game Details Tab
+    with tabs[1]:
+        st.header("Update Game Details")
+        st.write("Add your logic for updating game details here.")
+
+    # Delete Game Tab
+    with tabs[2]:
+        st.header("Delete Game")
+        st.write("Add your logic for deleting games here.")
