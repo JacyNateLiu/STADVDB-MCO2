@@ -84,7 +84,7 @@ def platform_box(platform):
     return html
 
 # Streamlit app
-st.title("Distributed Game Store Platform")
+st.title("STEAM Games")
 
 # Sidebar filters
 st.sidebar.header("Filters")
