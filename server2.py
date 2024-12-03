@@ -19,7 +19,10 @@ def create_connection():
 
 def get_total_records(connection, platform_filter):
     try:
-        query = "SELECT COUNT(*) FROM games_data WHERE "
+        # Base query to count records with at least two platforms
+        query = "SELECT COUNT(*) FROM games_data WHERE (windows + mac + linux) >= 2"
+        
+        # Apply additional filters if specified
         conditions = []
         if "Windows" in platform_filter:
             conditions.append("windows = 1")
@@ -27,7 +30,9 @@ def get_total_records(connection, platform_filter):
             conditions.append("mac = 1")
         if "Linux" in platform_filter:
             conditions.append("linux = 1")
-        query += " OR ".join(conditions) if conditions else "1"
+        if conditions:
+            query += f" AND ({' OR '.join(conditions)})"
+        
         cursor = connection.cursor()
         cursor.execute(query)
         total_records = cursor.fetchone()[0]
@@ -38,8 +43,10 @@ def get_total_records(connection, platform_filter):
 
 def fetch_paginated_data(connection, platform_filter, offset, records_per_page, sort_by, sort_order):
     try:
-        # Build the base query with filters
-        query = "SELECT * FROM games_data WHERE "
+        # Base query to select records with at least two platforms
+        query = "SELECT * FROM games_data WHERE (windows + mac + linux) >= 2"
+        
+        # Apply additional filters if specified
         conditions = []
         if "Windows" in platform_filter:
             conditions.append("windows = 1")
@@ -47,8 +54,9 @@ def fetch_paginated_data(connection, platform_filter, offset, records_per_page, 
             conditions.append("mac = 1")
         if "Linux" in platform_filter:
             conditions.append("linux = 1")
-        query += " OR ".join(conditions) if conditions else "1"
-
+        if conditions:
+            query += f" AND ({' OR '.join(conditions)})"
+        
         # Add sorting logic
         sort_column_mapping = {
             "App ID": "app_id",
@@ -59,7 +67,7 @@ def fetch_paginated_data(connection, platform_filter, offset, records_per_page, 
         sort_column = sort_column_mapping.get(sort_by, "app_id")  # Default to "app_id" if no match
         order = "ASC" if sort_order == "Ascending" else "DESC"
         query += f" ORDER BY {sort_column} {order}"
-
+        
         # Add pagination logic
         query += f" LIMIT {records_per_page} OFFSET {offset};"
 
