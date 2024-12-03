@@ -159,7 +159,7 @@ else:
     tabs = st.tabs(["Add Game", "Update Game Details", "Delete Game"])
 
     connection = create_connection()
-
+    
     if connection:
         cursor = connection.cursor()
 
@@ -209,6 +209,7 @@ else:
                         st.success(f"Game '{new_name}' added successfully with ID {new_app_id}.")
 
             except mysql.connector.Error as e:
+                connection.rollback()
                 st.error(f"Error adding game: {e}")
 
         with tabs[1]:
@@ -305,6 +306,7 @@ else:
                         st.success(f"Game ID {app_id} updated successfully.")
 
             except mysql.connector.Error as e:
+                connection.rollback()
                 st.error(f"Error: {e}")
 
         with tabs[2]:
@@ -327,6 +329,7 @@ else:
                         connection.commit()
                         st.success(f"Game ID {app_id_to_delete} deleted successfully.")
             except mysql.connector.Error as e:
+                connection.rollback()
                 st.error(f"Error deleting game: {e}")
 
         connection.close()
