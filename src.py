@@ -18,61 +18,146 @@ def create_connection():
         st.error(f"Database connection failed: {e}")
         return None
 
-# Function to fetch games data using a manual connection
-@st.cache_data
-def fetch_games_data():
-    connection = create_connection()
-    if connection:
-        try:
-            query = "SELECT * FROM games_data;"  # Adjust if needed
-            df = pd.read_sql(query, con=connection)
-            return df
-        except Exception as e:
-            st.error(f"Error fetching data: {e}")
-            return pd.DataFrame()  # Return empty DataFrame on error
-        finally:
-            connection.close()
-    else:
-        return pd.DataFrame()
+# Function to fetch total records count
+def get_total_records(connection, platform_filter):
+    try:
+        # Construct query based on the platform filter
+        query = "SELECT COUNT(*) FROM games_data WHERE "
+        conditions = []
+        if "Windows" in platform_filter:
+            conditions.append("windows = 1")
+        if "Mac" in platform_filter:
+            conditions.append("mac = 1")
+        if "Linux" in platform_filter:
+            conditions.append("linux = 1")
+        query += " OR ".join(conditions) if conditions else "1"  # Default query if no filter
+        cursor = connection.cursor()
+        cursor.execute(query)
+        total_records = cursor.fetchone()[0]
+        return total_records
+    except mysql.connector.Error as e:
+        st.error(f"Error calculating total records: {e}")
+        return 0
+
+# Function to fetch paginated game data
+def fetch_paginated_data(connection, platform_filter, offset, records_per_page):
+    try:
+        query = "SELECT * FROM games_data WHERE "
+        conditions = []
+        if "Windows" in platform_filter:
+            conditions.append("windows = 1")
+        if "Mac" in platform_filter:
+            conditions.append("mac = 1")
+        if "Linux" in platform_filter:
+            conditions.append("linux = 1")
+        query += " OR ".join(conditions) if conditions else "1"  # Default query if no filter
+        query += f" LIMIT {records_per_page} OFFSET {offset};"
+        df = pd.read_sql(query, con=connection)
+        return df
+    except mysql.connector.Error as e:
+        st.error(f"Error fetching data: {e}")
+        return pd.DataFrame()  # Return empty DataFrame on error
+
+# Function to generate styled platform labels with a rectangular box and rounded borders
+def platform_box(platform):
+    platform_colors = {
+        "Windows": "#1e90ff",  # Blue for Windows
+        "Mac": "#eb6434",      # Light grey for Mac
+        "Linux": "#32cd32"      # Green for Linux
+    }
+    color = platform_colors.get(platform, "#ffffff")  # Default to white if no color defined
+    html = f"""
+    <div style="
+        display: inline-block;
+        background-color: {color};
+        padding: 10px 20px;
+        margin-right: 5px;
+        border-radius: 12px;
+        font-size: 14px;
+        font-weight: bold;
+        color: white;
+        text-align: center;
+    ">
+        {platform}
+    </div>
+    """
+    return html
 
 # Streamlit app
 st.title("Distributed Game Store Platform")
 
-# Fetch data dynamically
-games_df = fetch_games_data()
+# Sidebar filters
+st.sidebar.header("Filters")
+platform_filter = st.sidebar.multiselect(
+    "Platforms", options=["Windows", "Mac", "Linux"], default=["Windows", "Mac", "Linux"]
+)
 
-if games_df.empty:
-    st.warning("No data available to display. Please check the database connection.")
+# Define records per page
+records_per_page = 10
+
+# Add sorting options in the sidebar
+sort_by = st.sidebar.selectbox(
+    "Sort by", options=["Price", "Release Date", "Name"], index=0
+)
+sort_order = st.sidebar.radio(
+    "Sort order", options=["Ascending", "Descending"], index=0
+)
+
+# Create database connection
+connection = create_connection()
+
+if connection:
+    # Get total records based on filters
+    total_records = get_total_records(connection, platform_filter)
+    
+    if total_records > 0:
+        # Calculate total pages
+        total_pages = (total_records // records_per_page) + (1 if total_records % records_per_page > 0 else 0)
+        
+        # Allow user to select the page number
+        current_page = st.number_input("Page number", min_value=1, max_value=total_pages, value=1)
+        
+        # Calculate offset based on the selected page number
+        offset = (current_page - 1) * records_per_page
+        
+        # Fetch paginated data
+        games_df = fetch_paginated_data(connection, platform_filter, offset, records_per_page)
+
+        # Sort the data based on the selected sort criteria
+        if sort_by == "Price":
+            games_df = games_df.sort_values(by="price", ascending=(sort_order == "Ascending"))
+        elif sort_by == "Release Date":
+            games_df = games_df.sort_values(by="release_date", ascending=(sort_order == "Ascending"))
+        elif sort_by == "Name":
+            games_df = games_df.sort_values(by="name", ascending=(sort_order == "Ascending"))
+
+        # Display the filtered and paginated data
+        st.subheader(f"Page {current_page} of {total_pages}")
+        if not games_df.empty:
+            for _, game in games_df.iterrows():
+                st.markdown(f"### {game['name']}")
+                st.write(f"**Release Date:** {game['release_date']}")
+                st.write(f"**Price:** ${game['price']}")
+                st.write(f"**About the Game:** {game['about_the_game']}")
+                
+                # Display platforms in styled boxes
+                platforms = []
+                if game['windows']:
+                    platforms.append("Windows")
+                if game['mac']:
+                    platforms.append("Mac")
+                if game['linux']:
+                    platforms.append("Linux")
+                
+                # Display platform boxes
+                platform_html = "".join([platform_box(platform) for platform in platforms])
+                st.markdown(platform_html, unsafe_allow_html=True)
+
+                st.markdown("---")
+    else:
+        st.write("No games available for the selected filters.")
+    
+    # Close the connection
+    connection.close()
 else:
-    # Sidebar filters
-    st.sidebar.header("Filters")
-    platform_filter = st.sidebar.multiselect(
-        "Platforms", options=["Windows", "Mac", "Linux"], default=["Windows", "Mac", "Linux"]
-    )
-
-    # Apply platform filters
-    def filter_by_platform(df, platforms):
-        conditions = []
-        if "Windows" in platforms:
-            conditions.append(df["windows"])
-        if "Mac" in platforms:
-            conditions.append(df["mac"])
-        if "Linux" in platforms:
-            conditions.append(df["linux"])
-        return df[pd.concat(conditions, axis=1).any(axis=1)] if conditions else df
-
-    filtered_data = filter_by_platform(games_df, platform_filter)
-
-    st.subheader("Available Games")
-    for _, game in filtered_data.iterrows():
-        st.markdown(f"### {game['name']}")
-        st.write(f"**Release Date:** {game['release_date']}")
-        st.write(f"**Price:** ${game['price']}")
-        st.write(f"**About the Game:** {game['about_the_game']}")
-        st.write(
-            f"**Platforms:** "
-            f"{'Windows ' if game['windows'] else ''}"
-            f"{'Mac ' if game['mac'] else ''}"
-            f"{'Linux' if game['linux'] else ''}"
-        )
-        st.markdown("---")
+    st.warning("Failed to connect to the database.")
